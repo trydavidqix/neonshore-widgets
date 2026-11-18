@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Sunset Job · Chat</title>
+<link rel="stylesheet" href="shared.css"><style>
+html,body{width:100%;height:100%;overflow:hidden;background:transparent}
+#wrap{position:absolute;right:0;bottom:0;width:440px;transform-origin:100% 100%}
+.chat{display:flex;flex-direction:column;height:100%}
+.hd{display:flex;align-items:center;justify-content:space-between;padding:16px 22px;border-bottom:2px solid color-mix(in srgb,var(--teal) 50%,transparent)}
+.hd b{font-family:var(--display);font-weight:800;font-size:22px;letter-spacing:.12em;color:var(--chrome)}
+.hd span{font-family:var(--hud);font-size:14px;font-weight:700;letter-spacing:.24em;color:var(--teal)}
+.hd span i{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--pink);box-shadow:0 0 8px var(--pink);margin-right:8px;vertical-align:1px}
+#msgs{flex:1;display:flex;flex-direction:column;justify-content:flex-end;gap:12px;padding:18px 20px 22px;overflow:hidden}
+.m{font-family:var(--hud);font-size:20px;line-height:1.3;font-weight:500;color:#ece8ff;padding:10px 14px;background:rgba(255,255,255,.05);border-left:3px solid var(--c);word-wrap:break-word;flex:none}
+.m b{color:var(--c);font-weight:700;margin-right:8px}
+.bdg{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.12em;padding:2px 6px;margin-right:6px;vertical-align:3px;background:var(--c);color:var(--ink);border-radius:3px}
+.m.host{background:linear-gradient(90deg,color-mix(in srgb,var(--c) 22%,transparent),rgba(255,255,255,.03));border-left-width:5px}
+</style></head><body><div id="wrap"><div class="chat glass cut">
+<div class="hd"><b id="title"></b><span><i></i>LIVE</span></div><div id="msgs"></div></div></div>
+<script src="engine.js"></script><script src="config.js"></script><script>
+const CFG = Object.assign({}, window.SJCFG || {}); for (const [k, v] of new URLSearchParams(location.search)) CFG[k] = v;
+const hex = h => "#" + String(h || "").replace(/^#/, "");
+</script><script>
+const wrap = document.getElementById("wrap"), box = document.getElementById("msgs");
+document.getElementById("title").textContent = CFG.chatTitle || "LIVE CHAT";
+function fit() { const s = Math.min(innerWidth / 440, innerHeight / 620); wrap.style.height = (innerHeight / s) + "px"; wrap.style.transform = `scale(${s})`; }
+fit(); addEventListener("resize", fit);
+const PALETTE = ["#ffd36b", "#3fe0d0", "#ff4fa3", "#b9a6e0", "#ff7a59", "#22e4ff"];
+const HOSTS = (CFG.aiHosts || "").split(",").filter(Boolean).map(s => s.trim().toUpperCase());
+const colorOf = n => { let h = 0; for (const c of n) h = (h * 31 + c.charCodeAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
+function el(m) {
+  const d = document.createElement("div"); d.className = "m"; const host = HOSTS.includes(m.user.toUpperCase());
+  const HC = Object.fromEntries((CFG.hostColors || "").split(",").filter(Boolean).map(p => p.split(":").map(x => x.trim()))); const c = host ? hex(HC[m.user.toUpperCase()] || "22e4ff") : (m.color || colorOf(m.user)); d.style.setProperty("--c", c);
+  if (host) { d.classList.add("host"); m.badge = "AI"; }
+  if (m.badge) { const b = document.createElement("span"); b.className = "bdg"; b.textContent = m.badge; d.appendChild(b); }
+  const u = document.createElement("b"); u.textContent = m.user; d.appendChild(u); d.appendChild(document.createTextNode(m.text)); return d;
+}
+function add(m) { const d = el(m); box.appendChild(d); while (box.children.length > (+CFG.maxMessages || 7)) box.firstChild.remove();
+  d.animate([{ transform: "translateX(60px)", opacity: 0, boxShadow: "-6px 0 18px var(--c)" }, { transform: "none", opacity: 1, boxShadow: "none" }], { duration: 350, easing: "cubic-bezier(.2,.9,.3,1)" });
+  if (+CFG.hideAfter) setTimeout(() => d.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 400, fill: "forwards" }), +CFG.hideAfter * 1000); }
+const DEMO = [
+  { user: "nightdriver88", text: "that sunset never gets old" }, { user: "coral_kid", badge: "SUB", text: "first time here, love the vibe" },
+  { user: "palmtree_pri", text: "lets gooo" }, { user: "YourName", badge: "HOST", text: "Welcome in, grab a drink!" },
+  { user: "retro_wave", text: "this overlay is so clean" }, { user: "beachbum_77", badge: "MOD", text: "be nice in chat, crew" },
+  { user: "dusk_runner", text: "gg" } ];
+if (SJ.render) { // deterministic demo for the preview WebM: message i enters at 0.6 + 1.25 i seconds
+  SJ.T = 10; const els = DEMO.map(el); els.forEach(e => { box.appendChild(e); e.style.display = "none"; });
+  SJ.on(t => els.forEach((e, i) => { const a = 0.6 + 1.25 * i, p = SJ.clamp((t - a) / .35); e.style.display = t >= a ? "block" : "none";
+    const k = SJ.ease.out(p); e.style.transform = `translateX(${(1 - k) * 60}px)`; e.style.opacity = k; e.style.boxShadow = p < 1 ? `-6px 0 18px var(--c)` : "none"; }));
+  SJ.setT(+(CFG.t || 0));
+} else if (CFG.channel) twitchChat(CFG.channel.toLowerCase());
+else if (CFG.demo === "1") { let i = 0; setInterval(() => add(DEMO[i++ % DEMO.length]), 1600); }
+function twitchChat(ch) { // anonymous, read-only Twitch chat connection (no login, no token)
+  const ws = new WebSocket("wss://irc-ws.chat.twitch.tv:443");
+  ws.onopen = () => { ws.send("CAP REQ :twitch.tv/tags"); ws.send("PASS SCHMOOPIIE"); ws.send("NICK justinfan" + Math.floor(Math.random() * 80000 + 1000)); ws.send("JOIN #" + ch); };
+  ws.onmessage = ev => ev.data.split("\r\n").forEach(line => {
+    if (line.startsWith("PING")) return ws.send("PONG :tmi.twitch.tv");
+    const i = line.indexOf(" PRIVMSG #"); if (i < 0) return;
+    const tags = {}; if (line[0] === "@") line.slice(1, line.indexOf(" ")).split(";").forEach(kv => { const j = kv.indexOf("="); tags[kv.slice(0, j)] = kv.slice(j + 1); });
+    const text = line.slice(line.indexOf(" :", i) + 2); const b = tags.badges || "";
+    add({ user: tags["display-name"] || "viewer", color: tags.color || null, text, badge: b.includes("broadcaster") ? "HOST" : b.includes("moderator") ? "MOD" : b.includes("subscriber") ? "SUB" : "" });
+  });
+  ws.onclose = () => setTimeout(() => twitchChat(ch), 5000);
+}
+</script></body></html>
